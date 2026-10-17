@@ -64,13 +64,13 @@
 ## 项目结构
 
 ```text
-2026-10-16-22-16-10/
-├── guess_number.py      # 命令行版（Python，逻辑最清晰，建议先看这个）
-├── guess-number.html    # 网页版（HTML + CSS + JS 全在一个文件里）
-├── README.md            # 项目说明文档（本文件）
-├── .gitignore           # 告诉 Git 哪些文件不用纳入版本管理
-├── .gitattributes       # 统一换行符，避免跨平台时整个文件被标记为已修改
-└── .workbuddy/          # 工具自动生成的目录，与游戏无关，已被 .gitignore 排除
+D:\play_do\
+└── first\               # 本项目：猜数字小游戏（任务 2 的成果）
+    ├── guess_number.py      # 命令行版（Python，逻辑最清晰，建议先看这个）
+    ├── guess-number.html    # 网页版（HTML + CSS + JS 全在一个文件里）
+    ├── README.md            # 项目说明文档（本文件）
+    ├── .gitignore           # 告诉 Git 哪些文件不用纳入版本管理
+    └── .gitattributes       # 统一换行符，避免跨平台时整个文件被标记为已修改
 ```
 
 | 文件 | 技术栈 | 运行方式 | 特点 |
@@ -115,7 +115,7 @@
 **第 2 步：切换到项目文件夹**
 
 ```bash
-cd /d C:\Users\Maryn\WorkBuddy\2026-10-16-22-16-10
+cd /d D:\play_do\first
 ```
 
 敲完回车。没有报错就说明切换成功了，可以再敲一个 `dir` 确认能看到 `guess_number.py`。
@@ -477,7 +477,7 @@ $$\text{最坏次数} = \lceil \log_2 100 \rceil = 7$$
 | :--- | :--- | :--- |
 | **Download ZIP**（最简单） | 打开上面的仓库页面 → 绿色 `Code` 按钮 → `Download ZIP` → 解压 | 只是想拿到文件、不需要版本管理 |
 | **git clone**（推荐） | `git clone git@github.com:Maryn0128/guess-number.git` | 想以后能 `git pull` 更新、能提交自己的改动 |
-| **直接复制本地文件** | 文件就在本机 `C:\Users\Maryn\WorkBuddy\2026-10-16-22-16-10` | 只是想在本机跑一下 |
+| **直接复制本地文件** | 文件就在本机 `D:\play_do\first` | 只是想在本机跑一下 |
 
 > [!NOTE]
 > `clone` / `push` 用的是 SSH 地址（`git@github.com:...`）而不是 HTTPS。原因是本项目所在网络环境下 `github.com` 的 HTTPS 经常超时，而 SSH 走 443 端口是通的 —— 具体原因见下面的「踩坑记录」。
