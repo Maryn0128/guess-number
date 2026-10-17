@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>猜数字小游戏（1-100）</title>
+<style>
+  /* ===== 页面基础样式，和游戏逻辑无关，可以忽略 ===== */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4f6fb;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    color: #1f2430;
+  }
+  .card {
+    width: 420px;
+    max-width: 92vw;
+    background: #ffffff;
+    border: 1px solid #e6e9f2;
+    border-radius: 18px;
+    padding: 28px 26px 24px;
+    box-shadow: 0 12px 32px rgba(31, 36, 48, 0.08);
+  }
+  h1 { margin: 0 0 6px; font-size: 20px; }
+  .sub { margin: 0 0 20px; font-size: 13px; color: #7b8398; }
+
+  /* 顶部数据条：已猜次数 / 提示区间 */
+  .stats {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .stat {
+    flex: 1;
+    background: #f7f9fd;
+    border-radius: 12px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .stat b { display: block; font-size: 20px; color: #2f6bff; }
+  .stat span { font-size: 12px; color: #7b8398; }
+
+  /* 输入区 */
+  .row { display: flex; gap: 10px; }
+  input[type="number"] {
+    flex: 1;
+    padding: 12px 14px;
+    font-size: 16px;
+    border: 1px solid #dfe4f0;
+    border-radius: 12px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input[type="number"]:focus { border-color: #2f6bff; }
+  /* 隐藏数字输入框的上下小箭头，让界面更干净 */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+  button {
+    padding: 12px 20px;
+    font-size: 15px;
+    border: none;
+    border-radius: 12px;
+    background: #2f6bff;
+    color: #fff;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+  }
+  button:hover { background: #1f57e0; }
+  button:disabled { background: #c6cee0; cursor: not-allowed; }
+  button.ghost { background: #eef2fb; color: #4a5570; }
+  button.ghost:hover { background: #e2e8f8; }
+
+  /* 结果提示文字 */
+  .msg {
+    margin: 18px 0 0;
+    min-height: 26px;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .msg.big   { color: #e8730c; }   /* 大了 */
+  .msg.small { color: #2f8ae0; }   /* 小了 */
+  .msg.win   { color: #16a34a; }   /* 猜中 */
+  .msg.warn  { color: #d9534f; font-weight: 500; font-size: 14px; } /* 输入不合法 */
+
+  /* 历史记录小标签 */
+  .history {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 16px;
+    min-height: 26px;
+  }
+  .chip {
+    font-size: 12px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #f0f3fa;
+    color: #5b6480;
+  }
+  .chip.big   { background: #fdf0e2; color: #b9620a; }
+  .chip.small { background: #eaf4fd; color: #1f6fb8; }
+  .chip.win   { background: #e6f7ee; color: #127a3c; }
+
+  .footer { margin-top: 20px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>猜数字小游戏</h1>
+  <p class="sub">我心里想了一个 1 ~ 100 的整数，你来猜猜看</p>
+
+  <!-- 顶部数据条 -->
+  <div class="stats">
+    <div class="stat"><b id="count">0</b><span>已猜次数</span></div>
+    <div class="stat"><b id="range">1 - 100</b><span>可能范围</span></div>
+  </div>
+
+  <!-- 输入区：输入框 + 猜测按钮 -->
+  <div class="row">
+    <input id="guessInput" type="number" min="1" max="100" placeholder="输入 1-100 的整数" autocomplete="off">
+    <button id="guessBtn">猜</button>
+  </div>
+
+  <!-- 提示信息 -->
+  <p id="message" class="msg"></p>
+
+  <!-- 猜过的数字 -->
+  <div id="history" class="history"></div>
+
+  <div class="footer">
+    <button id="restartBtn" class="ghost">重新开始</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   猜数字小游戏 —— 核心逻辑
+   ------------------------------------------------------------
+   思路非常直观，一共就 5 步：
+   1) 电脑随机生成一个 1~100 的「答案」
+   2) 玩家输入一个数字并点击「猜」
+   3) 把玩家的数字和答案比较：大了 / 小了 / 猜中
+   4) 每猜一次，计数 +1，并把这次猜测记下来
+   5) 猜中后结束，禁止继续输入，并显示一共猜了几次
+   ============================================================ */
+
+/* ---------- 第 0 步：拿到页面上要操作的几个元素 ---------- */
+const inputEl    = document.getElementById('guessInput');   // 输入框
+const guessBtn   = document.getElementById('guessBtn');     // 「猜」按钮
+const restartBtn = document.getElementById('restartBtn');   // 「重新开始」按钮
+const messageEl  = document.getElementById('message');      // 提示文字
+const countEl    = document.getElementById('count');        // 已猜次数
+const rangeEl    = document.getElementById('range');        // 可能范围
+const historyEl  = document.getElementById('history');      // 历史记录
+
+/* ---------- 几个「游戏状态」变量 ---------- */
+let answer    = 0;      // 电脑心里的答案
+let count     = 0;      // 玩家已经猜了几次
+let isOver    = false;  // 游戏是否已结束
+let low       = 1;      // 根据已有提示，答案至少是 low（用来显示可能范围）
+let high      = 100;    // 根据已有提示，答案至多是 high
+
+/* ---------- 第 1 步：开始一局新游戏 ---------- */
+function startGame() {
+  // Math.random() 会给出一个 [0, 1) 的小数，
+  // ×100 后是 [0, 100)，Math.floor 向下取整得到 0~99，再 +1 就是 1~100。
+  answer = Math.floor(Math.random() * 100) + 1;
+
+  count  = 0;
+  isOver = false;
+  low    = 1;
+  high   = 100;
+
+  // 把界面恢复成初始状态
+  countEl.textContent = 0;
+  rangeEl.textContent = '1 - 100';
+  messageEl.textContent = '';
+  messageEl.className = 'msg';
+  historyEl.innerHTML = '';
+  inputEl.value = '';
+  inputEl.disabled = false;
+  guessBtn.disabled = false;
+  inputEl.focus();
+
+  // 想自己调试时，把下面这行注释取消就能看到答案
+  // console.log('答案是：', answer);
+}
+
+/* ---------- 第 2 步：处理玩家的一次猜测 ---------- */
+function handleGuess() {
+  if (isOver) return;                       // 游戏已结束就不处理
+
+  const text = inputEl.value.trim();
+  const guess = Number(text);               // 把输入的文字转成数字
+
+  // 输入校验：必须是 1~100 之间的整数
+  if (text === '' || !Number.isInteger(guess) || guess < 1 || guess > 100) {
+    messageEl.textContent = '请输入 1 ~ 100 之间的整数哦';
+    messageEl.className = 'msg warn';
+    inputEl.select();
+    return;
+  }
+
+  count += 1;                               // 第 4 步：猜一次，计数 +1
+  countEl.textContent = count;
+
+  // 第 3 步：比较大小，给出提示
+  if (guess > answer) {
+    messageEl.textContent = '大了 ⬇️';
+    messageEl.className = 'msg big';
+    if (guess - 1 < high) high = guess - 1;          // 答案肯定比 guess 小
+    addChip(guess, 'big');
+  } else if (guess < answer) {
+    messageEl.textContent = '小了 ⬆️';
+    messageEl.className = 'msg small';
+    if (guess + 1 > low) low = guess + 1;            // 答案肯定比 guess 大
+    addChip(guess, 'small');
+  } else {
+    // 猜中了！第 5 步：结束游戏
+    messageEl.textContent = '猜中啦！答案是 ' + answer + '，你一共猜了 ' + count + ' 次 🎉';
+    messageEl.className = 'msg win';
+    addChip(guess, 'win');
+
+    isOver = true;
+    inputEl.disabled = true;
+    guessBtn.disabled = true;
+    return;
+  }
+
+  // 更新「可能范围」显示（小彩蛋：能帮你更快锁定答案）
+  rangeEl.textContent = low + ' - ' + high;
+
+  inputEl.value = '';
+  inputEl.focus();
+}
+
+/* ---------- 辅助函数：把一次猜测做成小标签显示出来 ---------- */
+function addChip(number, type) {
+  const span = document.createElement('span');
+  span.className = 'chip ' + type;
+  span.textContent = number;
+  historyEl.appendChild(span);
+}
+
+/* ---------- 第 4 步：把按钮和键盘接到上面的函数上 ---------- */
+guessBtn.addEventListener('click', handleGuess);       // 点按钮 → 猜
+restartBtn.addEventListener('click', startGame);        // 点重启 → 新一局
+inputEl.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') handleGuess();                 // 按回车 = 点「猜」
+});
+
+/* ---------- 页面打开就先开一局 ---------- */
+startGame();
+</script>
+</body>
+</html>
