@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>猜数字小游戏（1-100）</title>
+<title>猜数字小游戏</title>
 <style>
   /* ===== 页面基础样式，和游戏逻辑无关，可以忽略 ===== */
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* 让 hidden 属性真的能隐藏元素 */
   body {
     margin: 0;
     min-height: 100vh;
@@ -16,6 +17,7 @@
     background: #f4f6fb;
     font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
     color: #1f2430;
+    padding: 24px 0;
   }
   .card {
     width: 420px;
@@ -29,12 +31,29 @@
   h1 { margin: 0 0 6px; font-size: 20px; }
   .sub { margin: 0 0 20px; font-size: 13px; color: #7b8398; }
 
-  /* 顶部数据条：已猜次数 / 提示区间 */
-  .stats {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 18px;
+  /* 设置面板：玩法 / 难度 两组分段按钮 */
+  .field { margin-bottom: 16px; }
+  .field > label {
+    display: block;
+    font-size: 12px;
+    color: #7b8398;
+    margin-bottom: 7px;
   }
+  .seg { display: flex; gap: 8px; }
+  .seg button {
+    flex: 1;
+    background: #f4f6fb;
+    color: #4a5570;
+    font-size: 13px;
+    padding: 10px 6px;
+    line-height: 1.5;
+  }
+  .seg button:hover { background: #e9eefa; }
+  .seg button.on { background: #2f6bff; color: #fff; }
+  .seg button small { display: block; font-size: 11px; opacity: .75; }
+
+  /* 顶部数据条 */
+  .stats { display: flex; gap: 10px; margin-bottom: 16px; }
   .stat {
     flex: 1;
     background: #f7f9fd;
@@ -57,7 +76,6 @@
     transition: border-color .15s;
   }
   input[type="number"]:focus { border-color: #2f6bff; }
-  /* 隐藏数字输入框的上下小箭头，让界面更干净 */
   input::-webkit-outer-spin-button,
   input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
@@ -75,26 +93,40 @@
   button:disabled { background: #c6cee0; cursor: not-allowed; }
   button.ghost { background: #eef2fb; color: #4a5570; }
   button.ghost:hover { background: #e2e8f8; }
+  button.block { width: 100%; }
+
+  /* 电脑猜你时，中间那个大数字就是它猜的值 */
+  .bigGuess {
+    font-size: 46px;
+    font-weight: 700;
+    color: #2f6bff;
+    text-align: center;
+    line-height: 1.2;
+    margin: 6px 0 14px;
+  }
 
   /* 结果提示文字 */
   .msg {
     margin: 18px 0 0;
     min-height: 26px;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     text-align: center;
+    line-height: 1.6;
   }
-  .msg.big   { color: #e8730c; }   /* 大了 */
-  .msg.small { color: #2f8ae0; }   /* 小了 */
-  .msg.win   { color: #16a34a; }   /* 猜中 */
-  .msg.warn  { color: #d9534f; font-weight: 500; font-size: 14px; } /* 输入不合法 */
+  .msg.big   { color: #e8730c; }
+  .msg.small { color: #2f8ae0; }
+  .msg.win   { color: #16a34a; }
+  .msg.lose  { color: #d9534f; }
+  .msg.warn  { color: #d9534f; font-weight: 500; font-size: 14px; }
+  .msg.tip   { color: #7b8398; font-weight: 500; font-size: 13px; }
 
   /* 历史记录小标签 */
   .history {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-top: 16px;
+    margin-top: 14px;
     min-height: 26px;
   }
   .chip {
@@ -108,35 +140,66 @@
   .chip.small { background: #eaf4fd; color: #1f6fb8; }
   .chip.win   { background: #e6f7ee; color: #127a3c; }
 
-  .footer { margin-top: 20px; text-align: center; }
+  .footer { margin-top: 16px; text-align: center; }
 </style>
 </head>
 <body>
 
 <div class="card">
   <h1>猜数字小游戏</h1>
-  <p class="sub">我心里想了一个 1 ~ 100 的整数，你来猜猜看</p>
+  <p class="sub" id="subtitle">先选玩法，再选难度，然后点「开始游戏」</p>
 
-  <!-- 顶部数据条 -->
-  <div class="stats">
-    <div class="stat"><b id="count">0</b><span>已猜次数</span></div>
-    <div class="stat"><b id="range">1 - 100</b><span>可能范围</span></div>
+  <!-- ========== 设置面板：游戏开始前显示 ========== -->
+  <div id="setup">
+    <div class="field">
+      <label>玩法</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="player" class="on">我猜电脑</button>
+        <button data-mode="computer">电脑猜我</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>难度（数字范围 / 次数上限）</label>
+      <div class="seg" id="levelSeg">
+        <button data-level="1" class="on">简单<small>1-50 · 7 次</small></button>
+        <button data-level="2">普通<small>1-100 · 8 次</small></button>
+        <button data-level="3">困难<small>1-1000 · 11 次</small></button>
+      </div>
+    </div>
+
+    <button id="startBtn" class="block">开始游戏</button>
   </div>
 
-  <!-- 输入区：输入框 + 猜测按钮 -->
-  <div class="row">
-    <input id="guessInput" type="number" min="1" max="100" placeholder="输入 1-100 的整数" autocomplete="off">
-    <button id="guessBtn">猜</button>
-  </div>
+  <!-- ========== 游戏面板：开始后显示 ========== -->
+  <div id="game" hidden>
+    <div class="stats">
+      <div class="stat"><b id="count">0</b><span id="countLabel">已猜次数</span></div>
+      <div class="stat"><b id="range">1 - 100</b><span id="rangeLabel">可能范围</span></div>
+    </div>
 
-  <!-- 提示信息 -->
-  <p id="message" class="msg"></p>
+    <!-- 玩法一：你来输入 -->
+    <div class="row" id="playerRow">
+      <input id="guessInput" type="number" min="1" max="100" placeholder="输入 1-100 的整数" autocomplete="off">
+      <button id="guessBtn">猜</button>
+    </div>
 
-  <!-- 猜过的数字 -->
-  <div id="history" class="history"></div>
+    <!-- 玩法二：电脑猜，你只需回答 -->
+    <div id="computerRow" hidden>
+      <div class="bigGuess" id="bigGuess">50</div>
+      <div class="row">
+        <button class="ghost" id="fbBig">大了</button>
+        <button class="ghost" id="fbSmall">小了</button>
+        <button id="fbHit">中了</button>
+      </div>
+    </div>
 
-  <div class="footer">
-    <button id="restartBtn" class="ghost">重新开始</button>
+    <p id="message" class="msg"></p>
+    <div id="history" class="history"></div>
+
+    <div class="footer">
+      <button id="restartBtn" class="ghost">重新开始</button>
+    </div>
   </div>
 </div>
 
@@ -144,105 +207,288 @@
 /* ============================================================
    猜数字小游戏 —— 核心逻辑
    ------------------------------------------------------------
-   思路非常直观，一共就 5 步：
-   1) 电脑随机生成一个 1~100 的「答案」
-   2) 玩家输入一个数字并点击「猜」
-   3) 把玩家的数字和答案比较：大了 / 小了 / 猜中
-   4) 每猜一次，计数 +1，并把这次猜测记下来
-   5) 猜中后结束，禁止继续输入，并显示一共猜了几次
+   两种玩法共用同一套「状态」，只是每一轮由谁来出数字不同：
+
+     玩法一「我猜电脑」：电脑出答案，玩家输入 → 比较 → 提示
+     玩法二「电脑猜我」：玩家心里想数字，电脑每次猜中点 → 玩家回答
+
+   代码顺序：
+     1) 常量与工具函数
+     2) 游戏状态变量
+     3) 开始一局 / 结束一局
+     4) 玩法一：玩家猜
+     5) 玩法二：电脑猜
+     6) 把按钮接到函数上
    ============================================================ */
 
-/* ---------- 第 0 步：拿到页面上要操作的几个元素 ---------- */
-const inputEl    = document.getElementById('guessInput');   // 输入框
-const guessBtn   = document.getElementById('guessBtn');     // 「猜」按钮
-const restartBtn = document.getElementById('restartBtn');   // 「重新开始」按钮
-const messageEl  = document.getElementById('message');      // 提示文字
-const countEl    = document.getElementById('count');        // 已猜次数
-const rangeEl    = document.getElementById('range');        // 可能范围
-const historyEl  = document.getElementById('history');      // 历史记录
+/* ---------- 1. 常量与工具函数 ---------- */
 
-/* ---------- 几个「游戏状态」变量 ---------- */
-let answer    = 0;      // 电脑心里的答案
-let count     = 0;      // 玩家已经猜了几次
-let isOver    = false;  // 游戏是否已结束
-let low       = 1;      // 根据已有提示，答案至少是 low（用来显示可能范围）
-let high      = 100;    // 根据已有提示，答案至多是 high
+// 三个难度的数字范围
+const LEVELS = {
+  1: { name: '简单', low: 1, high: 50 },
+  2: { name: '普通', low: 1, high: 100 },
+  3: { name: '困难', low: 1, high: 1000 }
+};
 
-/* ---------- 第 1 步：开始一局新游戏 ---------- */
+/**
+ * 算出这个范围「理论上最多几次能猜到」，再留 1 次余量。
+ * 原理：每次猜中点都能排除一半，所以次数 = log2(一共有多少个数)。
+ *   1~50   → log2(50)  ≈ 5.64 → 6 次
+ *   1~100  → log2(100) ≈ 6.64 → 7 次
+ *   1~1000 → log2(1000)= 9.97 → 10 次
+ * 末尾 +1 是故意放宽，不要求玩家每步都走最优路线。
+ */
+function maxAttempts(low, high) {
+  return Math.ceil(Math.log2(high - low + 1)) + 1;
+}
+
+/* ---------- 2. 拿到页面上要操作的元素 ---------- */
+
+const setupEl     = document.getElementById('setup');
+const gameEl      = document.getElementById('game');
+const subtitleEl  = document.getElementById('subtitle');
+const modeSeg     = document.getElementById('modeSeg');
+const levelSeg    = document.getElementById('levelSeg');
+const startBtn    = document.getElementById('startBtn');
+
+const playerRow   = document.getElementById('playerRow');
+const computerRow = document.getElementById('computerRow');
+const inputEl     = document.getElementById('guessInput');
+const guessBtn    = document.getElementById('guessBtn');
+const bigGuessEl  = document.getElementById('bigGuess');
+const fbBig       = document.getElementById('fbBig');
+const fbSmall     = document.getElementById('fbSmall');
+const fbHit       = document.getElementById('fbHit');
+
+const messageEl   = document.getElementById('message');
+const countEl     = document.getElementById('count');
+const rangeEl     = document.getElementById('range');
+const countLabel  = document.getElementById('countLabel');
+const rangeLabel  = document.getElementById('rangeLabel');
+const historyEl   = document.getElementById('history');
+const restartBtn  = document.getElementById('restartBtn');
+
+/* ---------- 3. 游戏状态变量 ---------- */
+
+let mode  = 'player';   // 当前玩法：'player' 或 'computer'
+let level = 1;          // 当前难度：1 / 2 / 3
+
+let low = 1;            // 本局的数字下限
+let high = 100;         // 本局的数字上限
+let limit = 8;          // 本局允许猜几次
+let count = 0;          // 已经猜了几次
+let isOver = false;     // 本局是否已结束
+
+// 玩法一专用
+let answer = 0;         // 电脑心里的答案
+let winLow = 1;         // 根据提示推断出的范围（显示用）
+let winHigh = 100;
+
+// 玩法二专用
+let aiLow = 1;          // 电脑认为答案至少是 aiLow
+let aiHigh = 100;       // 电脑认为答案至多是 aiHigh
+let aiGuess = 0;        // 电脑这一次猜的数字
+
+/* ---------- 4. 开始一局 / 结束一局 ---------- */
+
 function startGame() {
-  // Math.random() 会给出一个 [0, 1) 的小数，
-  // ×100 后是 [0, 100)，Math.floor 向下取整得到 0~99，再 +1 就是 1~100。
-  answer = Math.floor(Math.random() * 100) + 1;
+  // 读取设置面板上选中的难度
+  const conf = LEVELS[level];
+  low = conf.low;
+  high = conf.high;
+  limit = maxAttempts(low, high);
 
-  count  = 0;
+  // 重置所有状态
+  count = 0;
   isOver = false;
-  low    = 1;
-  high   = 100;
+  winLow = low;
+  winHigh = high;
+  aiLow = low;
+  aiHigh = high;
 
-  // 把界面恢复成初始状态
+  // 切换面板：藏起设置，显示游戏区
+  setupEl.hidden = true;
+  gameEl.hidden = false;
+
   countEl.textContent = 0;
-  rangeEl.textContent = '1 - 100';
+  rangeEl.textContent = low + ' - ' + high;
   messageEl.textContent = '';
   messageEl.className = 'msg';
   historyEl.innerHTML = '';
-  inputEl.value = '';
-  inputEl.disabled = false;
-  guessBtn.disabled = false;
-  inputEl.focus();
 
-  // 想自己调试时，把下面这行注释取消就能看到答案
-  // console.log('答案是：', answer);
+  if (mode === 'player') {
+    /* 玩法一：电脑随机出题 */
+    // Math.random() 给出 [0,1) 的小数，乘范围长度后向下取整，再加上下限。
+    answer = Math.floor(Math.random() * (high - low + 1)) + low;
+
+    playerRow.hidden = false;
+    computerRow.hidden = true;
+    countLabel.textContent = '已猜次数';
+    rangeLabel.textContent = '可能范围';
+    subtitleEl.textContent = conf.name + ' · 最多 ' + limit + ' 次机会';
+
+    inputEl.value = '';
+    inputEl.min = low;
+    inputEl.max = high;
+    inputEl.placeholder = '输入 ' + low + '-' + high + ' 的整数';
+    inputEl.disabled = false;
+    guessBtn.disabled = false;
+    inputEl.focus();
+
+    // 想自己调试时，把下面这行注释取消就能在控制台看到答案
+    // console.log('答案是：', answer);
+  } else {
+    /* 玩法二：电脑来猜，玩家只要回答 */
+    playerRow.hidden = true;
+    computerRow.hidden = false;
+    countLabel.textContent = '电脑已猜';
+    rangeLabel.textContent = '它认为的范围';
+    subtitleEl.textContent = conf.name + ' · 你心里的数字别告诉它';
+
+    computerStep();
+  }
 }
 
-/* ---------- 第 2 步：处理玩家的一次猜测 ---------- */
+/**
+ * 结束本局。
+ * @param {boolean} won    是否赢了（玩家猜中 / 电脑猜中）
+ * @param {string}  reason 'hit' 猜中、'limit' 次数用完、'cheat' 回答矛盾
+ */
+function endGame(won, reason) {
+  isOver = true;
+  inputEl.disabled = true;
+  guessBtn.disabled = true;
+
+  if (mode === 'player') {
+    if (won) {
+      messageEl.innerHTML = '猜中啦！答案是 <b>' + answer + '</b>，你一共猜了 <b>' +
+                            count + '</b> 次（上限 ' + limit + ' 次）' +
+                            (count <= limit - 1 ? '<br><span class="tip">这已经是很漂亮的成绩了 👍</span>' : '');
+      messageEl.className = 'msg win';
+    } else {
+      messageEl.innerHTML = '次数用完了，答案是 <b>' + answer + '</b>' +
+                            '<br><span class="tip">提示：每次都猜中间值，最多 ' +
+                            (limit - 1) + ' 次就能猜到</span>';
+      messageEl.className = 'msg lose';
+    }
+  } else {
+    if (won) {
+      messageEl.innerHTML = '猜对啦！你心里想的是 <b>' + aiGuess + '</b>，我只用了 <b>' +
+                            count + '</b> 次' +
+                            (count <= limit - 1 ? '<br><span class="tip">这就是二分法的威力 👍</span>' : '');
+      messageEl.className = 'msg win';
+    } else if (reason === 'cheat') {
+      messageEl.innerHTML = '你的回答前后矛盾了，我的范围被压成了空的' +
+                            '<br><span class="tip">下次回答按顺序来就好了 😄</span>';
+      messageEl.className = 'msg lose';
+    } else {
+      messageEl.innerHTML = '我没猜出来……你是不是中途改过答案？';
+      messageEl.className = 'msg lose';
+    }
+  }
+}
+
+/* ---------- 5. 玩法一：玩家输入数字来猜 ---------- */
+
 function handleGuess() {
-  if (isOver) return;                       // 游戏已结束就不处理
+  if (isOver || mode !== 'player') return;
 
   const text = inputEl.value.trim();
-  const guess = Number(text);               // 把输入的文字转成数字
+  const guess = Number(text);
 
-  // 输入校验：必须是 1~100 之间的整数
-  if (text === '' || !Number.isInteger(guess) || guess < 1 || guess > 100) {
-    messageEl.textContent = '请输入 1 ~ 100 之间的整数哦';
+  // 输入校验：必须是本局范围内的整数
+  if (text === '' || !Number.isInteger(guess) || guess < low || guess > high) {
+    messageEl.textContent = '请输入 ' + low + ' ~ ' + high + ' 之间的整数哦';
     messageEl.className = 'msg warn';
     inputEl.select();
     return;
   }
 
-  count += 1;                               // 第 4 步：猜一次，计数 +1
+  count += 1;
   countEl.textContent = count;
 
-  // 第 3 步：比较大小，给出提示
   if (guess > answer) {
+    if (guess - 1 < winHigh) winHigh = guess - 1;   // 答案肯定比 guess 小
+    addChip(guess, 'big');
     messageEl.textContent = '大了 ⬇️';
     messageEl.className = 'msg big';
-    if (guess - 1 < high) high = guess - 1;          // 答案肯定比 guess 小
-    addChip(guess, 'big');
   } else if (guess < answer) {
+    if (guess + 1 > winLow) winLow = guess + 1;     // 答案肯定比 guess 大
+    addChip(guess, 'small');
     messageEl.textContent = '小了 ⬆️';
     messageEl.className = 'msg small';
-    if (guess + 1 > low) low = guess + 1;            // 答案肯定比 guess 大
-    addChip(guess, 'small');
   } else {
-    // 猜中了！第 5 步：结束游戏
-    messageEl.textContent = '猜中啦！答案是 ' + answer + '，你一共猜了 ' + count + ' 次 🎉';
-    messageEl.className = 'msg win';
     addChip(guess, 'win');
-
-    isOver = true;
-    inputEl.disabled = true;
-    guessBtn.disabled = true;
+    endGame(true, 'hit');
     return;
   }
 
-  // 更新「可能范围」显示（小彩蛋：能帮你更快锁定答案）
-  rangeEl.textContent = low + ' - ' + high;
+  rangeEl.textContent = winLow + ' - ' + winHigh;
+
+  // 次数用完了还没猜中 → 输
+  if (count >= limit) {
+    endGame(false, 'limit');
+    return;
+  }
 
   inputEl.value = '';
   inputEl.focus();
 }
 
-/* ---------- 辅助函数：把一次猜测做成小标签显示出来 ---------- */
+/* ---------- 6. 玩法二：电脑猜，玩家点按钮回答 ---------- */
+
+function computerStep() {
+  if (isOver) return;
+
+  // 次数用完
+  if (count >= limit) { endGame(false, 'limit'); return; }
+
+  // 范围被压空 = 玩家回答矛盾
+  if (aiLow > aiHigh) { endGame(false, 'cheat'); return; }
+
+  // 取中点，这就是二分法
+  aiGuess = Math.floor((aiLow + aiHigh) / 2);
+  count += 1;
+
+  countEl.textContent = count;
+  rangeEl.textContent = aiLow + ' - ' + aiHigh;
+  bigGuessEl.textContent = aiGuess;
+  messageEl.textContent = '第 ' + count + ' 次猜测，还剩 ' + (limit - count) + ' 次机会';
+  messageEl.className = 'msg tip';
+}
+
+/**
+ * 玩家点「大了 / 小了 / 中了」时调用。
+ * @param {string} type 'big' 猜大了 / 'small' 猜小了 / 'hit' 猜中了
+ */
+function handleFeedback(type) {
+  if (isOver || mode !== 'computer') return;
+
+  if (type === 'hit') {
+    addChip(aiGuess, 'win');
+    endGame(true, 'hit');
+    return;
+  }
+
+  if (type === 'big') {
+    // 玩家说「猜大了」→ 答案比 aiGuess 小
+    addChip(aiGuess, 'big');
+    aiHigh = aiGuess - 1;
+  } else {
+    // 玩家说「猜小了」→ 答案比 aiGuess 大
+    addChip(aiGuess, 'small');
+    aiLow = aiGuess + 1;
+  }
+
+  if (aiLow > aiHigh) { endGame(false, 'cheat'); return; }
+  if (count >= limit) { endGame(false, 'limit'); return; }
+
+  computerStep();
+}
+
+/* ---------- 7. 辅助函数 ---------- */
+
+// 把一次猜测做成小标签追加到历史区
 function addChip(number, type) {
   const span = document.createElement('span');
   span.className = 'chip ' + type;
@@ -250,15 +496,43 @@ function addChip(number, type) {
   historyEl.appendChild(span);
 }
 
-/* ---------- 第 4 步：把按钮和键盘接到上面的函数上 ---------- */
-guessBtn.addEventListener('click', handleGuess);       // 点按钮 → 猜
-restartBtn.addEventListener('click', startGame);        // 点重启 → 新一局
-inputEl.addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') handleGuess();                 // 按回车 = 点「猜」
+/* ---------- 8. 把按钮和键盘接到函数上 ---------- */
+
+// 设置面板：玩法切换
+modeSeg.addEventListener('click', function (e) {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  mode = btn.dataset.mode;
+  [].forEach.call(modeSeg.children, function (b) { b.classList.toggle('on', b === btn); });
 });
 
-/* ---------- 页面打开就先开一局 ---------- */
-startGame();
+// 设置面板：难度切换
+levelSeg.addEventListener('click', function (e) {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  level = Number(btn.dataset.level);
+  [].forEach.call(levelSeg.children, function (b) { b.classList.toggle('on', b === btn); });
+});
+
+startBtn.addEventListener('click', startGame);
+
+// 玩法一：点「猜」或按回车
+guessBtn.addEventListener('click', handleGuess);
+inputEl.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') handleGuess();
+});
+
+// 玩法二：三个回答按钮
+fbBig.addEventListener('click', function () { handleFeedback('big'); });
+fbSmall.addEventListener('click', function () { handleFeedback('small'); });
+fbHit.addEventListener('click', function () { handleFeedback('hit'); });
+
+// 重新开始：回到设置面板，可以换玩法、换难度
+restartBtn.addEventListener('click', function () {
+  gameEl.hidden = true;
+  setupEl.hidden = false;
+  subtitleEl.textContent = '先选玩法，再选难度，然后点「开始游戏」';
+});
 </script>
 </body>
 </html>
