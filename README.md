@@ -22,6 +22,7 @@
 - [程序逻辑说明](#程序逻辑说明)
 - [核心代码解读](#核心代码解读)
 - [获胜策略](#获胜策略)
+- [版本管理：Git 与 GitHub](#版本管理git-与-github)
 - [常见问题](#常见问题)
 - [后续可以做的扩展](#后续可以做的扩展)
 - [附录 本 README 用到的 Markdown 语法](#附录-本-readme-用到的-markdown-语法)
@@ -63,7 +64,9 @@
 ├── guess_number.py      # 命令行版（Python，逻辑最清晰，建议先看这个）
 ├── guess-number.html    # 网页版（HTML + CSS + JS 全在一个文件里）
 ├── README.md            # 项目说明文档（本文件）
-└── .workbuddy/          # 工具自动生成的目录，与游戏无关，可忽略
+├── .gitignore           # 告诉 Git 哪些文件不用纳入版本管理
+├── .gitattributes       # 统一换行符，避免跨平台时整个文件被标记为已修改
+└── .workbuddy/          # 工具自动生成的目录，与游戏无关，已被 .gitignore 排除
 ```
 
 | 文件 | 技术栈 | 运行方式 | 特点 |
@@ -301,6 +304,80 @@ $$\text{最坏次数} = \lceil \log_2 100 \rceil = 7$$
 
 ---
 
+## 版本管理：Git 与 GitHub
+
+本项目已经是一个完整的 Git 仓库，并托管在 GitHub 上：
+
+**https://github.com/Maryn0128/guess-number**
+
+### 想下载下来看 / 发给别人
+
+| 方式 | 操作 | 适合场景 |
+| :--- | :--- | :--- |
+| **Download ZIP**（最简单） | 打开上面的仓库页面 → 绿色 `Code` 按钮 → `Download ZIP` → 解压 | 只是想拿到文件、不需要版本管理 |
+| **git clone**（推荐） | `git clone git@github.com:Maryn0128/guess-number.git` | 想以后能 `git pull` 更新、能提交自己的改动 |
+| **直接复制本地文件** | 文件就在本机 `C:\Users\Maryn\WorkBuddy\2026-10-16-22-16-10` | 只是想在本机跑一下 |
+
+> [!NOTE]
+> `clone` / `push` 用的是 SSH 地址（`git@github.com:...`）而不是 HTTPS。原因是本项目所在网络环境下 `github.com` 的 HTTPS 经常超时，而 SSH 走 443 端口是通的 —— 具体原因见下面的「踩坑记录」。
+
+### 日常更新，只要三条命令
+
+```bash
+git add -A                          # 把改动加入暂存区
+git commit -m "改了什么"             # 生成一次提交（快照）
+git push                            # 推到 GitHub
+```
+
+第一次推送时用过 `-u origin main`，它把本地 `main` 和远程 `origin/main` 绑定了起来，之后就可以直接写 `git push`。
+
+### 常用查看命令
+
+| 命令 | 作用 |
+| :--- | :--- |
+| `git status` | 看当前有哪些文件被改了、哪些已暂存 |
+| `git log --oneline` | 一行一条地看提交历史 |
+| `git diff` | 看具体改了哪几行 |
+| `git pull` | 把 GitHub 上的新改动拉到本地 |
+
+### 本次搭建仓库时踩到的两个坑（值得记一下）
+
+**坑一：`github.com` 打不开，但其实是代理的问题**
+
+一开始用 `curl https://github.com` 全部超时，看起来像被墙。但绕过代理直连（`curl --noproxy '*'`）后，`github.com/new` 只用了 0.7 秒就返回 HTTP 302 —— 真正的问题在中间那层代理返回了 `502`，而不是网络封锁。
+
+> 教训：遇到「网站打不开」，先用 `curl -s -o /dev/null -w "HTTP %{http_code} %{time_total}s" 网址` 测具体状态码和耗时，再判断是 DNS、代理还是真的不通，比反复刷新浏览器有效得多。
+
+**坑二：22 端口和主站被拦时，用 SSH over 443 绕过去**
+
+当 `github.com:443` 和常规的 22 端口都不稳定时，GitHub 官方提供了一个备用通道 `ssh.github.com:443`。配置写进 `~/.ssh/config` 后，`git push` 命令一个字都不用改：
+
+```text
+Host github.com
+    HostName ssh.github.com
+    Port 443
+    User git
+```
+
+验证方式：`ssh -T git@github.com`。如果返回 `Hi 用户名! You've successfully authenticated`，说明公钥已登记且通道打通；返回 `Permission denied (publickey)` 则说明连上了但公钥还没加，去 https://github.com/settings/keys 添加即可。
+
+### 还有一个容易忽略的点：提交署名
+
+Git 的提交里带作者信息，如果和 GitHub 账号不匹配，提交在仓库里不会算成你的贡献。所以要先确认：
+
+```bash
+git config user.name "你的用户名"
+git config user.email "你的邮箱"
+```
+
+如果之前的提交署名写错了，可以就地修正（只在还没推送时安全）：
+
+```bash
+git commit --amend --reset-author --no-edit
+```
+
+---
+
 ## 常见问题
 
 | 现象 | 原因 | 解决办法 |
@@ -312,6 +389,7 @@ $$\text{最坏次数} = \lceil \log_2 100 \rceil = 7$$
 | 按 Ctrl + C 想退出 | 已做异常捕获 | 会正常显示「已退出，下次再来玩～」 |
 | 觉得 1~100 太简单 | 范围写死在常量里 | 修改文件顶部的 `LOW` 和 `HIGH`，例如改成 1 和 1000 |
 | 想调试，怎么看到答案 | 答案本来就不该显示给玩家 | 命令行版：临时在 `play_one_round()` 里加一行 `print(answer)`；网页版：取消 JS 中 `// console.log('答案是：', answer)` 的注释 |
+| 想把项目发给别人 / 换台电脑 | 文件只在本机 | 仓库已托管在 GitHub，让对方 `git clone` 或直接下载 ZIP，见「版本管理」一节 |
 
 ---
 
